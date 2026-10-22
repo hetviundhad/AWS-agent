@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface Profile {
   id: string;
@@ -138,6 +138,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
+    if (!isSupabaseConfigured) {
+      const demo = localStorage.getItem('aitutor_demo_user');
+      if (demo) {
+        try {
+          const parsed = JSON.parse(demo);
+          setUser(parsed.user);
+          setSession(parsed.session);
+          setProfile(parsed.profile);
+        } catch {
+          activateSession('e5ee47b2-ad1d-4536-b3eb-a165de1792b1', 'demo@studymind.ai', 'Demo Evaluator');
+        }
+      } else {
+        activateSession('e5ee47b2-ad1d-4536-b3eb-a165de1792b1', 'demo@studymind.ai', 'Demo Evaluator');
+      }
+      setLoading(false);
+      return;
+    }
+
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
@@ -180,6 +198,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const normalizedEmail = email.trim().toLowerCase();
     const cleanName = fullName.trim() || normalizedEmail.split('@')[0];
 
+    if (!isSupabaseConfigured) {
+      const userId = 'user_' + Date.now();
+      await activateSession(userId, normalizedEmail, cleanName);
+      return { error: null, needsEmailConfirmation: false };
+    }
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email: normalizedEmail,
@@ -220,6 +244,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string): Promise<string | null> => {
     const normalizedEmail = email.trim().toLowerCase();
+
+    if (!isSupabaseConfigured) {
+      const cleanName = normalizedEmail.split('@')[0] || 'Evaluator';
+      await activateSession('e5ee47b2-ad1d-4536-b3eb-a165de1792b1', normalizedEmail, cleanName);
+      return null;
+    }
 
     try {
       let { data, error } = await supabase.auth.signInWithPassword({
